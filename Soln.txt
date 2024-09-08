@@ -1,0 +1,74 @@
+Lottery System Smart Contract
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Lottery {
+    address public manager;
+    address[] public players;
+    uint public ticketPrice;
+    uint public lotteryEndTime;
+
+    constructor(uint _ticketPrice, uint _duration) {
+        require(_ticketPrice > 0, "Ticket price must be greater than zero");
+        require(_duration > 0, "Duration must be greater than zero");
+
+        manager = msg.sender;
+        ticketPrice = _ticketPrice;
+        lotteryEndTime = block.timestamp + _duration;
+    }
+
+    modifier onlyManager() {
+        require(msg.sender == manager, "Only manager can perform this action");
+        _;
+    }
+
+    modifier onlyBeforeEnd() {
+        require(block.timestamp < lotteryEndTime, "Lottery has ended");
+        _;
+    }
+
+    modifier onlyAfterEnd() {
+        require(block.timestamp >= lotteryEndTime, "Lottery is still active");
+        _;
+    }
+
+    function enter() public payable onlyBeforeEnd {
+        require(msg.value == ticketPrice, "Incorrect ticket price");
+
+        players.push(msg.sender);
+    }
+
+    function pickWinner() public onlyManager onlyAfterEnd {
+        require(players.length > 0, "No players in the lottery");
+
+        uint index = random() % players.length;
+        address winner = players[index];
+
+        // Resetting the lottery
+        players = new address[];
+        lotteryEndTime = block.timestamp + 1 weeks; // Example duration for the next lottery
+
+        // Transfer winnings to the winner
+        (bool success, ) = payable(winner).call{value: address(this).balance}("");
+        require(success, "Transfer failed");
+    }
+
+    function getPlayers() public view returns (address[] memory) {
+        return players;
+    }
+
+    function random() private view returns (uint) {
+        // Using block difficulty and timestamp for simplicity, consider Chainlink VRF for better randomness
+        return uint(keccak256(abi.encodePacked(block.difficulty, block.timestamp, players)));
+    }
+
+    receive() external payable {
+        // Allow contract to receive ETH
+    }
+
+    fallback() external payable {
+        // Allow contract to handle undefined function calls
+    }
+}
+
